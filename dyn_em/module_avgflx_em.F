@@ -379,7 +379,7 @@ CONTAINS
        & v_tend_pg,v_tend_cor_curv,                                                              &
        & w_tend_pg,w_tend_cor_curv,                                                              &
        & u_2, u_save, v_2, v_save, w_2, w_save, ru, rv, ww, t_save, thd_save, th_phy, Q,         &
-       & ph_1, ph_2, phb, zx, zy, alt, dph_x, dph_y,                                             &
+       & ph_1, ph_2, phb, zx, zy, alt, dph_x, dph_y, ph_tend,                                    &
        & fnm, fnp, mut, c1h, c2h, c1f, c2f, cf1, cf2, cf3, cfn, cfn1,                       &
        & msfuy, msfvx, msfvy, msftx, msfty,                                                      &
        & last_timestep, dt                                                                       )
@@ -445,7 +445,7 @@ CONTAINS
 
     REAL, OPTIONAL, DIMENSION(ims:ime, kms:kme, jms:jme) , INTENT(IN) :: &
          u_2, u_save, v_2, v_save, w_2, w_save, ru, rv, ww,  &
-         t_save, thd_save, th_phy, Q, ph_1, ph_2, phb, zx, zy, alt,  &
+         t_save, thd_save, th_phy, Q, ph_1, ph_2, phb, ph_tend, zx, zy, alt,  &
          ftx_small, fty_small, ftz_small,  &
          fqx_adv, fqy_adv, fqz_adv,        &
          fux_adv, fuy_adv, fuz_adv,        &
@@ -480,7 +480,7 @@ CONTAINS
     REAL :: local_count, count_p1, rhom, rhox, rhoy, rhoz, rhoxy, rhoxz, rhoyz,            &
             rho_mean, rhox_mean, rhoy_mean, rhoz_mean, rhoxy_mean, rhoxz_mean, rhoyz_mean, &
             rho_mean_flx, rhox_mean_flx, rhoy_mean_flx, rhoz_mean_flx, rhoxy_mean_flx,     &
-            rhoxz_mean_flx, rhoyz_mean_flx, &
+            rhoxz_mean_flx, rhoyz_mean_flx, ph_tend_decoupled,                             &
             mu_mean, mux_mean, muy_mean, muxy_mean, muxz_mean, muyz_mean,        &
             fqx_dfac, fqy_dfac, &
             fux_dfac, fuy_dfac, &
@@ -541,19 +541,20 @@ CONTAINS
           call stagger_z(rho8w(i,k,j), rho_d(i,:,j),  &
                          cf1, cf2, cf3, cfn, cfn1, fnm, fnp, &
                          k, kms, kme, kde              )
-          rdzdt(i,k,j) = rho8w(i,k,j)*(ph_2(i,k,j) - ph_1(i,k,j))/(g*dt)
-
         ENDDO
         ENDDO
         ENDDO
         DO j=jts-1,jte
         DO k=kts,kte
         DO i=its-1,ite
-          !diagnostic velocity
+          ! phi tendencies for Cartesian corrections
           IF (k .eq. kts) THEN
             dph_x(i,k,j) = -g*0.5*msftx(i,j)*(zx(i,k,j)*u8w(i,k,j) + zx(i+1,k,j)*u8w(i+1,k,j))
             dph_y(i,k,j) = -g*0.5*msfty(i,j)*(zy(i,k,j)*v8w(i,k,j) + zy(i,k,j+1)*v8w(i,k,j+1))
           ENDIF
+          ! decouple from mu and map-scale factor
+          ph_tend_decoupled = msfty(i,j)*ph_tend(i,k,j)/(c1f(k)*mut(i,j)+c2f(k))
+          rdzdt(i,k,j) = rho8w(i,k,j)*ph_tend_decoupled/g
           rzxu(i,k,j) = -rho8w(i,k,j)*dph_x(i,k,j)/g
           rzyv(i,k,j) = -rho8w(i,k,j)*dph_y(i,k,j)/g
           rw_diag(i,k,j) = rdzdt(i,k,j) + rzxu(i,k,j) + rzyv(i,k,j) + ww(i,k,j)*msfty(i,j)/(-g)
